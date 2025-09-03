@@ -1,13 +1,17 @@
 from pathlib import Path
 import os
+import sys
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Secret key y debug
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-default-key')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
+# ALLOWED_HOSTS
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
+# Aplicaciones
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -48,18 +52,29 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dashboard_project.wsgi.application'
 
-# Database: PostgreSQL en Render
+# Database: PostgreSQL en Render con validación
+DB_NAME = os.environ.get('POSTGRES_DB')
+DB_USER = os.environ.get('POSTGRES_USER')
+DB_PASSWORD = os.environ.get('POSTGRES_PASSWORD')
+DB_HOST = os.environ.get('POSTGRES_HOST')
+DB_PORT = os.environ.get('POSTGRES_PORT', '5432')
+
+if not all([DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]):
+    print("Error: Las variables de entorno de PostgreSQL no están definidas.", file=sys.stderr)
+    sys.exit(1)
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB'),
-        'USER': os.environ.get('POSTGRES_USER'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
-        'HOST': os.environ.get('POSTGRES_HOST'),
-        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'NAME': DB_NAME,
+        'USER': DB_USER,
+        'PASSWORD': DB_PASSWORD,
+        'HOST': DB_HOST,
+        'PORT': DB_PORT,
     }
 }
 
+# Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
@@ -67,6 +82,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
 ]
 
+# Internacionalización
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
@@ -80,4 +96,5 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'  # Para collectstatic en Render
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
