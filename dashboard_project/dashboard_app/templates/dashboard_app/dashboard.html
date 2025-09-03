@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard de Ventas</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Ventas por producto</h1>
+    <canvas id="ventasChart"></canvas>
+
+    <script>
+        const ctx = document.getElementById('ventasChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: {{ productos|safe }},
+                datasets: [{
+                    label: 'Cantidad vendida',
+                    data: {{ cantidades|safe }},
+                    borderWidth: 1
+                }]
+            },
+        });
+    </script>
+</body>
+</html>

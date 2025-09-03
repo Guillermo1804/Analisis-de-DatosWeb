@@ -1,0 +1,239 @@
+<!-- dashboard_app/templates/dashboard_app/preview.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Preview {{ dataset.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* opcional: altura fija para canvases para consistencia */
+        canvas {
+            width: 100% !important;
+            height: 260px !important;
+        }
+    </style>
+</head>
+<body class="p-4">
+<div class="container">
+    <h1 class="mb-4">Vista previa: {{ dataset.name }}</h1>
+
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <p><strong>Filas (estimadas):</strong> {{ total_rows }} &nbsp; | &nbsp; <strong>Columnas:</strong> {{ n_columns }}</p>
+
+    <!-- columnas y tipos -->
+    <h3>Columnas y tipos</h3>
+    <div class="table-responsive mb-4">
+        <table class="table table-sm table-striped">
+            <thead class="table-dark"><tr><th>Columna</th><th>Tipo</th><th>Nulos</th></tr></thead>
+            <tbody>
+            {% for row in rows_info %}
+                <tr>
+                    <td>{{ row.name }}</td>
+                    <td>{{ row.dtype }}</td>
+                    <td>{{ row.nulls }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- primeras filas -->
+    <h3>Primeras filas</h3>
+    <div class="table-responsive mb-4">
+        {{ head_html|safe }}
+    </div>
+
+    <!-- ESTADÍSTICAS + GRÁFICOS -->
+    {% if numeric_stats %}
+    <h3 class="mt-4">Estadísticas descriptivas (columnas numéricas)</h3>
+    <div class="table-responsive mb-4">
+        <table class="table table-sm table-striped table-bordered">
+            <thead class="table-dark">
+            <tr>
+                <th>Columna</th>
+                <th>Conteo</th>
+                <th>Media</th>
+                <th>Desv. Std</th>
+                <th>Mínimo</th>
+                <th>25%</th>
+                <th>Mediana (50%)</th>
+                <th>75%</th>
+                <th>Máximo</th>
+                <th>Moda</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for stat in numeric_stats %}
+                <tr>
+                    <td>{{ stat.column }}</td>
+                    <td>{{ stat.count }}</td>
+                    <td>{% if stat.mean is not None %}{{ stat.mean|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td>{% if stat.std is not None %}{{ stat.std|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td>{% if stat.min is not None %}{{ stat.min|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td>{% if stat.q25 is not None %}{{ stat.q25|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td>{% if stat.q50 is not None %}{{ stat.q50|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td>{% if stat.q75 is not None %}{{ stat.q75|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td>{% if stat.max is not None %}{{ stat.max|floatformat:2 }}{% else %}-{% endif %}</td>
+                    <td>{% if stat.mode is not None %}{{ stat.mode|floatformat:2 }}{% else %}-{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Para cada columna numérica: mostramos lado a lado
+         1) gráfico resumen (mín, 25, med, 75, máx, media)
+         2) histograma real -->
+    <h3 class="mt-4">Gráficas por columna numérica</h3>
+    <div class="mb-4">
+        {% for stat in numeric_stats %}
+        <div class="row mb-4 align-items-start">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ stat.column }} — Resumen</h5>
+                        <canvas id="chart-{{ forloop.counter }}"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ stat.column }} — Histograma</h5>
+                        <canvas id="hist-{{ forloop.counter }}"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pasar datos a JS de forma segura -->
+    {{ numeric_stats|json_script:"numeric-stats-data" }}
+    {{ numeric_values|json_script:"numeric-values-data" }}
+
+    <script>
+    // Recuperar los datos pasados por json_script (JSON seguro)
+    const numericStats = JSON.parse(document.getElementById('numeric-stats-data').textContent);
+    const numericValues = JSON.parse(document.getElementById('numeric-values-data').textContent);
+
+    // Función util para crear el gráfico resumen
+    function createSummaryChart(ctx, stat) {
+        const dataValues = [
+            stat.min ?? 0,
+            stat.q25 ?? 0,
+            stat.q50 ?? 0,
+            stat.q75 ?? 0,
+            stat.max ?? 0,
+            stat.mean ?? 0
+        ];
+
+        return new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Mín', '25%', 'Mediana', '75%', 'Máx', 'Media'],
+                datasets: [{
+                    label: stat.column,
+                    data: dataValues,
+                    backgroundColor: 'rgba(54, 162, 235, 0.45)',
+                    borderColor: 'rgba(54, 162, 235, 0.9)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+        });
+    }
+
+    // Función util para crear histograma (bins automáticos)
+    function createHistogram(ctx, values, bins = 10) {
+        // filtrar y convertir a números válidos
+        const nums = (values || []).map(v => Number(v)).filter(v => Number.isFinite(v));
+        if (nums.length === 0) {
+            // gráfico vacío: mostrar barra con 0
+            return new Chart(ctx, {
+                type: 'bar',
+                data: { labels: ['sin datos'], datasets: [{ label: 'sin datos', data: [0] }] },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        const min = Math.min(...nums);
+        const max = Math.max(...nums);
+
+        // si todos iguales -> un solo bin
+        if (min === max) {
+            return new Chart(ctx, {
+                type: 'bar',
+                data: { labels: [String(min.toFixed(2))], datasets: [{ label: 'frecuencia', data: [nums.length] }] },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        const binWidth = (max - min) / bins;
+        const counts = new Array(bins).fill(0);
+        nums.forEach(v => {
+            let bin = Math.floor((v - min) / binWidth);
+            if (bin < 0) bin = 0;
+            if (bin >= bins) bin = bins - 1;
+            counts[bin]++;
+        });
+
+        // etiquetas tipo "a - b"
+        const labels = Array.from({length: bins}, (_, i) => {
+            const a = min + i * binWidth;
+            const b = a + binWidth;
+            return `${a.toFixed(2)} - ${b.toFixed(2)}`;
+        });
+
+        return new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Frecuencia',
+                    data: counts,
+                    backgroundColor: 'rgba(255, 99, 132, 0.45)',
+                    borderColor: 'rgba(255, 99, 132, 0.9)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // Crear todos los gráficos: para cada stat, crear summary + hist usando same index
+    numericStats.forEach((stat, index) => {
+        const idx = index + 1;
+        // summary chart
+        const chartEl = document.getElementById('chart-' + idx);
+        if (chartEl) {
+            createSummaryChart(chartEl.getContext('2d'), stat);
+        }
+
+        // histograma basado en numericValues[stat.column]
+        const histEl = document.getElementById('hist-' + idx);
+        const valuesForCol = numericValues.hasOwnProperty(stat.column) ? numericValues[stat.column] : [];
+        if (histEl) {
+            createHistogram(histEl.getContext('2d'), valuesForCol, 10);
+        }
+    });
+    </script>
+    {% endif %}
+
+    <a href="{% url 'dashboard_app:upload_csv' %}" class="btn btn-secondary mt-4">Volver</a>
+</div>
+</body>
+</html>
