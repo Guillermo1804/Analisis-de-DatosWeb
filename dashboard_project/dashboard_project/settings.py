@@ -76,12 +76,10 @@ WSGI_APPLICATION = 'dashboard_project.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 import dj_database_url
-
 DATABASES = {
-    "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL")
-    )
+    'default': dj_database_url.config(default='postgresql://...')
 }
+
 
 
 
@@ -128,4 +126,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Media (uploads)
 MEDIA_URL = '/media/'
+
 MEDIA_ROOT = BASE_DIR / 'media'
